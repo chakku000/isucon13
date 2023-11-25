@@ -107,6 +107,22 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 }
 
 func initializeHandler(c echo.Context) error {
+	// 一旦iconディレクトリを削除
+	if _, err := os.Stat(iconBaseDir); !os.IsNotExist(err) {
+		err := os.RemoveAll(iconBaseDir)
+		if err != nil {
+			fmt.Println("Error deleting directory:", err)
+			return err
+		}
+	}
+
+	// iconディレクトリ再作成
+	err := os.Mkdir(iconBaseDir, 0755)
+	if err != nil {
+		fmt.Println("Error creating directory:", err)
+		return err
+	}
+
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
