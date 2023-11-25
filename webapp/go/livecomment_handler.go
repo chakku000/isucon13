@@ -403,10 +403,12 @@ func fillLivecommentResponseWithConn(ctx context.Context, dbConn *sqlx.DB, livec
 		return Livecomment{}, err
 	}
 
+	// 指定した配信の情報を取得
 	livestreamModel := LivestreamModel{}
 	if err := dbConn.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
 		return Livecomment{}, err
 	}
+	// 指定した配信の詳細情報を取得
 	livestream, err := fillLivestreamResponseWithConn(ctx, dbConn, livestreamModel)
 	if err != nil {
 		return Livecomment{}, err
