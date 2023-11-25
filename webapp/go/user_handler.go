@@ -8,10 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
+	"sync"
 	"time"
-    "sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
@@ -101,7 +100,6 @@ func getIconHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-
 	// 初期実装
 	// SELECT * FROM users WHERE name = ?
 	//      user.IDが目的
@@ -114,9 +112,9 @@ func getIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-    userIconMapMutex.RLock()
-    defer userIconMapMutex.RUnlock()
-    image := userIconMap[user.ID]
+	userIconMapMutex.RLock()
+	defer userIconMapMutex.RUnlock()
+	image := userIconMap[user.ID]
 
 	//var image []byte
 	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
@@ -127,7 +125,7 @@ func getIconHandler(c echo.Context) error {
 	//	}
 	//}
 
-    // TODO uncomment していいiconHash
+	// TODO uncomment していいiconHash
 	// requestIconHash := c.Request().Header.Get("If-None-Match")
 	// iconHash := fmt.Sprintf("%x", sha256.Sum256(image))
 
@@ -162,11 +160,11 @@ func postIconHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-    userIconMapMutex.Lock()
-    defer userIconMapMutex.Unlock()
-    userIconMap[userID] = req.Image
+	userIconMapMutex.Lock()
+	defer userIconMapMutex.Unlock()
+	userIconMap[userID] = req.Image
 
-    iconID := int64(len(userIconMap))
+	iconID := int64(len(userIconMap))
 
 	// 初期実装
 	// DELETE FROM icons WHRER user_id = ?
@@ -436,9 +434,9 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		return User{}, err
 	}
 
-    userIconMapMutex.RLock()
-    defer userIconMapMutex.Unlock()
-    image := userIconMap[userModel.ID]
+	userIconMapMutex.RLock()
+	defer userIconMapMutex.Unlock()
+	image := userIconMap[userModel.ID]
 
 	//var image []byte
 	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
