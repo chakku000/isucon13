@@ -494,18 +494,17 @@ func fillLivestreamResponseWithConn(ctx context.Context, dbConn *sqlx.DB, livest
 		return Livestream{}, err
 	}
 
-	var livestreamTagModels []*LivestreamTagModel
-	if err := dbConn.SelectContext(ctx, &livestreamTagModels, "SELECT * FROM livestream_tags WHERE livestream_id = ?", livestreamModel.ID); err != nil {
+	var tagModels []TagModel
+	if err := dbConn.SelectContext(ctx,
+		tagModels,
+		" SELECT `tags`.`id`, `tags`.`name` FROM `tags` "+
+			" INNER JOIN `livestream_tags` ON `tags`.`id` = `livestream_tags`.`tag_id` "+
+			" WHERE `livestream_id` = ? ",
+	); err != nil {
 		return Livestream{}, err
 	}
-
-	tags := make([]Tag, len(livestreamTagModels))
-	for i := range livestreamTagModels {
-		tagModel := TagModel{}
-		if err := dbConn.GetContext(ctx, &tagModel, "SELECT * FROM tags WHERE id = ?", livestreamTagModels[i].TagID); err != nil {
-			return Livestream{}, err
-		}
-
+	tags := make([]Tag, len(tagModels))
+	for i, tagModel := range tagModels {
 		tags[i] = Tag{
 			ID:   tagModel.ID,
 			Name: tagModel.Name,
