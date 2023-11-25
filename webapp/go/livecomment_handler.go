@@ -79,6 +79,7 @@ func getLivecommentsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "livestream_id in path must be integer")
 	}
 
+	// 特定の配信に紐づくコメント情報を取得する
 	query := "SELECT * FROM livecomments WHERE livestream_id = ? ORDER BY created_at DESC"
 	if c.QueryParam("limit") != "" {
 		limit, err := strconv.Atoi(c.QueryParam("limit"))
@@ -97,6 +98,7 @@ func getLivecommentsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
 	}
 
+	// 特定の配信に紐づくコメントの詳細情報を取得
 	livecomments := make([]Livecomment, len(livecommentModels))
 	for i := range livecommentModels {
 		livecomment, err := fillLivecommentResponseWithConn(ctx, dbConn, livecommentModels[i])
@@ -395,6 +397,7 @@ func fillLivecommentResponseWithConn(ctx context.Context, dbConn *sqlx.DB, livec
 	if err := dbConn.GetContext(ctx, &commentOwnerModel, "SELECT * FROM users WHERE id = ?", livecommentModel.UserID); err != nil {
 		return Livecomment{}, err
 	}
+	// コメントした人の theme と icon の情報を取得する
 	commentOwner, err := fillUserResponseWithConn(ctx, dbConn, commentOwnerModel)
 	if err != nil {
 		return Livecomment{}, err

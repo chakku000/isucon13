@@ -496,10 +496,11 @@ func fillLivestreamResponseWithConn(ctx context.Context, dbConn *sqlx.DB, livest
 
 	var tagModels []TagModel
 	if err := dbConn.SelectContext(ctx,
-		tagModels,
+		&tagModels,
 		" SELECT `tags`.`id`, `tags`.`name` FROM `tags` "+
 			" INNER JOIN `livestream_tags` ON `tags`.`id` = `livestream_tags`.`tag_id` "+
 			" WHERE `livestream_id` = ? ",
+		livestreamModel.ID,
 	); err != nil {
 		return Livestream{}, err
 	}
