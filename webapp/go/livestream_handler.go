@@ -189,7 +189,7 @@ func searchLivestreamsHandler(c echo.Context) error {
 		WHERE t.name = ?
 		ORDER BY ls.id DESC
 		`
-		var livestreamModels []*LivestreamModel
+		
 		if err := tx.SelectContext(ctx, &livestreamModels, query, keyTagName); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestreams: "+err.Error())
 		}
