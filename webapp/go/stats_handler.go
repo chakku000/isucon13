@@ -226,7 +226,8 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 	WITH totaltips AS (
 		SELECT
 			l.id,
-			IFNULL(SUM(lc.tip), 0) AS TotalTip
+			IFNULL(SUM(lc.tip), 0) AS TotalTip,
+			IFNULL(MAX(lc.tip), 0) AS MaxTip
 		FROM
 			livestreams l
 			LEFT JOIN livecomments lc ON l.id = lc.livestream_id
@@ -236,7 +237,7 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 	totalreactions AS (
 		SELECT
 			l.id,
-			COUNT(DISTINCT r.id) AS TotalReactions
+			COUNT(*) AS TotalReactions
 		FROM
 			livestreams l
 			LEFT JOIN reactions r ON l.id = r.livestream_id
@@ -254,16 +255,23 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 			totaltips
 			LEFT JOIN totalreactions USING (id)
 		GROUP BY id
-	), tmp AS (
+	),
+	totalviewers AS (
 		SELECT
 			l.id,
-			COUNT(DISTINCT lvh.user_id) AS ViewersCount,
-			COUNT(DISTINCT lr.id) AS TotalReports,
-			IFNULL(MAX(lc.tip), 0) AS MaxTip
+			COUNT(*) AS ViewersCount
 		FROM
 			livestreams l
-			LEFT JOIN livecomments lc ON l.id = lc.livestream_id
 			LEFT JOIN livestream_viewers_history lvh ON l.id = lvh.livestream_id
+		WHERE l.id = ?
+		GROUP BY l.id
+	),
+	totalreports AS (
+		SELECT
+			l.id,
+			COUNT(*) AS TotalReports
+		FROM
+			livestreams l
 			LEFT JOIN livecomment_reports lr ON l.id = lr.livestream_id
 		WHERE l.id = ?
 		GROUP BY l.id
@@ -275,15 +283,19 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		TotalReports,
 		TotalReactions
 	FROM
-		tmp
+		livestreams AS l
 	JOIN
 		totaltips USING (id)
 	JOIN
 		totalreactions USING (id)
 	JOIN
 		ranking USING (id)
-	WHERE id = ?
-    `, livestreamID, livestreamID)
+	JOIN
+		totalreports USING (id)
+	JOIN
+		totalviewers USING (id)
+	WHERE l.id = ?
+    `, livestreamID, livestreamID, livestreamID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream statistics: "+err.Error())
 	}
