@@ -4,6 +4,7 @@ package main
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"net"
@@ -34,6 +35,14 @@ var (
 )
 
 func init() {
+	fi, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		println("failed to load fallback image")
+		return
+	}
+
+	fallbackImageHash = fmt.Sprintf("%s", sha256.Sum256(fi))
+
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	if secretKey, ok := os.LookupEnv("ISUCON13_SESSION_SECRETKEY"); ok {
 		secret = []byte(secretKey)

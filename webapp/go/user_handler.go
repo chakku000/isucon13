@@ -32,6 +32,7 @@ const (
 )
 
 var fallbackImage = "../img/NoImage.jpg"
+var fallbackImageHash string
 var iconBaseDir = "/home/isucon/icons"
 
 type UserModel struct {
@@ -91,6 +92,7 @@ type PostIconResponse struct {
 
 // userID -> icon
 var userIconMapMutex = sync.RWMutex{}
+var iconHashCache = map[int64]string{}
 
 func getIconPath(userID int64) string {
 	uid := strconv.FormatInt(userID, 10)
@@ -115,7 +117,7 @@ func getIconHandler(c echo.Context) error {
 
 	// 初期実装
 	// SELECT * FROM users WHERE name = ?
-	//      user.IDが目的
+	//  }    user.IDが目的
 	// SELECT image FROM icons WHERE user_id = ?
 	var user UserModel
 	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
@@ -132,20 +134,22 @@ func getIconHandler(c echo.Context) error {
 		return c.File(fallbackImage)
 	}
 
-	image, err := ioutil.ReadFile(iconFilePath)
-	if err != nil {
-		fmt.Println("Failed to open file: ", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Couldn't open file")
-	}
-
-	// TODO uncomment していいiconHash
 	requestIconHash := c.Request().Header.Get("If-None-Match")
-	iconHash := fmt.Sprintf("%x", sha256.Sum256(image))
-	if requestIconHash == iconHash {
+	iconHash, ok := iconHashCache[user.ID]
+	if ok && iconHash == requestIconHash {
 		return c.NoContent(http.StatusNotModified)
 	}
+	// TODO もしhashがマッチしなければそのまま画像を返してしまっていい?
+	//return c.Blob(http.StatusOK, "image/jpeg", )
+	return c.File(iconFilePath)
 
-	return c.Blob(http.StatusOK, "image/jpeg", image)
+	//image, err := ioutil.ReadFile(iconFilePath)
+	//if err != nil {
+	//  fmt.Println("Failed to open file: ", err)
+	//  return echo.NewHTTPError(http.StatusInternalServerError, "Couldn't open file")
+	//}
+
+	//return c.Blob(http.StatusOK, "image/jpeg", image)
 }
 
 func postIconHandler(c echo.Context) error {
@@ -177,6 +181,8 @@ func postIconHandler(c echo.Context) error {
 	iconFilePath := getIconPath(userID)
 
 	ioutil.WriteFile(iconFilePath, req.Image, 0644)
+	iconHash := sha256.Sum256(req.Image)
+	iconHashCache[userID] = fmt.Sprintf("%x", iconHash)
 
 	// iconBaseDir以下のファイル数をiconIDにする
 	// もしかしたらユニークならなんでもいいかも
@@ -197,21 +203,21 @@ func postIconHandler(c echo.Context) error {
 	// DELETE FROM icons WHRER user_id = ?
 	// INSERT INTO icons(user_id, image) VALUES (?, ?)
 	//if _, err := tx.ExecContext(ctx, "DELETE FROM icons WHERE user_id = ?", userID); err != nil {
-	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
+	//  return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
 	//}
 
 	//rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image) VALUES (?, ?)", userID, req.Image)
 	//if err != nil {
-	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
+	//  return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
 	//}
 
 	//iconID, err := rs.LastInsertId()
 	//if err != nil {
-	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
+	//  return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
 	//}
 
 	//if err := tx.Commit(); err != nil {
-	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
+	//  return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	//}
 
 	// ?? icon idはどこで使われている?
@@ -480,19 +486,22 @@ func fillUserResponseWithConn(ctx context.Context, dbConn *sqlx.DB, userModel Us
 
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	var err error
 	iconFilePath := getIconPath(userModel.ID)
-	var image []byte
+	var iconHashStr string
 	if !FileExists(iconFilePath) {
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
-			return User{}, err
-		}
+		iconHashStr = fallbackImageHash
 	} else {
-		image, err = os.ReadFile(iconFilePath)
+		_iconHash, ok := iconHashCache[userModel.ID]
+		if ok {
+			iconHashStr = _iconHash
+		} else {
+			image, err := os.ReadFile(iconFilePath)
+			if err != nil {
+				return User{}, err
+			}
+			iconHashStr = fmt.Sprintf("%x", sha256.Sum256(image))
+		}
 	}
-
-	iconHash := sha256.Sum256(image)
 
 	user := User{
 		ID:          userModel.ID,
@@ -503,7 +512,7 @@ func fillUserResponseWithConn(ctx context.Context, dbConn *sqlx.DB, userModel Us
 			ID:       themeModel.ID,
 			DarkMode: themeModel.DarkMode,
 		},
-		IconHash: fmt.Sprintf("%x", iconHash),
+		IconHash: iconHashStr,
 	}
 
 	return user, nil
@@ -517,19 +526,22 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	var err error
 	iconFilePath := getIconPath(userModel.ID)
-	var image []byte
+	var iconHashStr string
 	if !FileExists(iconFilePath) {
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
-			return User{}, err
-		}
+		iconHashStr = fallbackImageHash
 	} else {
-		image, err = os.ReadFile(iconFilePath)
+		_iconHash, ok := iconHashCache[userModel.ID]
+		if ok {
+			iconHashStr = _iconHash
+		} else {
+			image, err := os.ReadFile(iconFilePath)
+			if err != nil {
+				return User{}, err
+			}
+			iconHashStr = fmt.Sprintf("%x", sha256.Sum256(image))
+		}
 	}
-
-	iconHash := sha256.Sum256(image)
 
 	user := User{
 		ID:          userModel.ID,
@@ -540,7 +552,7 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 			ID:       themeModel.ID,
 			DarkMode: themeModel.DarkMode,
 		},
-		IconHash: fmt.Sprintf("%x", iconHash),
+		IconHash: iconHashStr,
 	}
 
 	return user, nil
