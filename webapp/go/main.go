@@ -119,6 +119,7 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
+    print("commit: c960a93")
 	e := echo.New()
 	e.Debug = true
 	e.Logger.SetLevel(echolog.DEBUG)
