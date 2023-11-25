@@ -461,46 +461,23 @@ func verifyUserSession(c echo.Context) error {
 	return nil
 }
 
-func fetchUserIcon(userID int64) ([]byte, error) {
+// need to get lock
+func getImageHash(userID int64) string {
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	var err error
 	iconFilePath := getIconPath(userID)
-	var image []byte
+
 	if !FileExists(iconFilePath) {
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		image, err = os.ReadFile(iconFilePath)
+		return fallbackImageHash
 	}
-	return image, nil
+
+	return iconHashCache[userID]
 }
 
 func fillUserResponseWithConn(ctx context.Context, dbConn *sqlx.DB, userModel UserModel) (User, error) {
 	themeModel := ThemeModel{}
 	if err := dbConn.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
 		return User{}, err
-	}
-
-	userIconMapMutex.RLock()
-	defer userIconMapMutex.RUnlock()
-	iconFilePath := getIconPath(userModel.ID)
-	var iconHashStr string
-	if !FileExists(iconFilePath) {
-		iconHashStr = fallbackImageHash
-	} else {
-		_iconHash, ok := iconHashCache[userModel.ID]
-		if ok {
-			iconHashStr = _iconHash
-		} else {
-			image, err := os.ReadFile(iconFilePath)
-			if err != nil {
-				return User{}, err
-			}
-			iconHashStr = fmt.Sprintf("%x", sha256.Sum256(image))
-		}
 	}
 
 	user := User{
@@ -512,7 +489,7 @@ func fillUserResponseWithConn(ctx context.Context, dbConn *sqlx.DB, userModel Us
 			ID:       themeModel.ID,
 			DarkMode: themeModel.DarkMode,
 		},
-		IconHash: iconHashStr,
+		IconHash: getImageHash(userModel.ID),
 	}
 
 	return user, nil
@@ -524,25 +501,6 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		return User{}, err
 	}
 
-	userIconMapMutex.RLock()
-	defer userIconMapMutex.RUnlock()
-	iconFilePath := getIconPath(userModel.ID)
-	var iconHashStr string
-	if !FileExists(iconFilePath) {
-		iconHashStr = fallbackImageHash
-	} else {
-		_iconHash, ok := iconHashCache[userModel.ID]
-		if ok {
-			iconHashStr = _iconHash
-		} else {
-			image, err := os.ReadFile(iconFilePath)
-			if err != nil {
-				return User{}, err
-			}
-			iconHashStr = fmt.Sprintf("%x", sha256.Sum256(image))
-		}
-	}
-
 	user := User{
 		ID:          userModel.ID,
 		Name:        userModel.Name,
@@ -552,7 +510,7 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 			ID:       themeModel.ID,
 			DarkMode: themeModel.DarkMode,
 		},
-		IconHash: iconHashStr,
+		IconHash: getImageHash(userModel.ID),
 	}
 
 	return user, nil

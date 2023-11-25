@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -473,11 +472,6 @@ func fetchUsersWithDetails(ctx context.Context, dbConn *sqlx.DB, userIDs []int64
 
 	users := make([]*User, len(resp))
 	for i, r := range resp {
-		image, err := fetchUserIcon(r.ID)
-		if err != nil {
-			return nil, err
-		}
-		iconHash := sha256.Sum256(image)
 		users[i] = &User{
 			ID:          r.ID,
 			Name:        r.Name,
@@ -487,7 +481,7 @@ func fetchUsersWithDetails(ctx context.Context, dbConn *sqlx.DB, userIDs []int64
 				ID:       r.ThemeID,
 				DarkMode: r.DarkMode,
 			},
-			IconHash: fmt.Sprintf("%x", iconHash),
+			IconHash: getImageHash(r.ID),
 		}
 	}
 	return users, nil
