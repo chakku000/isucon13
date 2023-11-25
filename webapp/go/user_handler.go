@@ -439,11 +439,11 @@ func fillUserResponseWithConn(ctx context.Context, dbConn *sqlx.DB, userModel Us
 		return User{}, err
 	}
 
-	var image []byte
-	if err := dbConn.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return User{}, err
-		}
+	userIconMapMutex.RLock()
+	defer userIconMapMutex.RUnlock()
+	image, ok := userIconMap[userModel.ID]
+	var err error
+	if !ok {
 		image, err = os.ReadFile(fallbackImage)
 		if err != nil {
 			return User{}, err
