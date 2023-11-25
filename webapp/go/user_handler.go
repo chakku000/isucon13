@@ -435,7 +435,7 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	}
 
 	userIconMapMutex.RLock()
-	defer userIconMapMutex.Unlock()
+	defer userIconMapMutex.RUnlock()
 	image := userIconMap[userModel.ID]
 
 	//var image []byte
