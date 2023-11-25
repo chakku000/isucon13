@@ -472,6 +472,48 @@ func getLivecommentReportsHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, reports)
 }
 
+func fillLivestreamResponseWithConn(ctx context.Context, dbConn *sqlx.DB, livestreamModel LivestreamModel) (Livestream, error) {
+	ownerModel := UserModel{}
+	if err := dbConn.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
+		return Livestream{}, err
+	}
+	owner, err := fillUserResponseWithConn(ctx, dbConn, ownerModel)
+	if err != nil {
+		return Livestream{}, err
+	}
+
+	var tagModels []TagModel
+	if err := dbConn.SelectContext(ctx,
+		&tagModels,
+		" SELECT `tags`.`id`, `tags`.`name` FROM `tags` "+
+			" INNER JOIN `livestream_tags` ON `tags`.`id` = `livestream_tags`.`tag_id` "+
+			" WHERE `livestream_id` = ? ",
+		livestreamModel.ID,
+	); err != nil {
+		return Livestream{}, err
+	}
+	tags := make([]Tag, len(tagModels))
+	for i, tagModel := range tagModels {
+		tags[i] = Tag{
+			ID:   tagModel.ID,
+			Name: tagModel.Name,
+		}
+	}
+
+	livestream := Livestream{
+		ID:           livestreamModel.ID,
+		Owner:        owner,
+		Title:        livestreamModel.Title,
+		Tags:         tags,
+		Description:  livestreamModel.Description,
+		PlaylistUrl:  livestreamModel.PlaylistUrl,
+		ThumbnailUrl: livestreamModel.ThumbnailUrl,
+		StartAt:      livestreamModel.StartAt,
+		EndAt:        livestreamModel.EndAt,
+	}
+	return livestream, nil
+}
+
 func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel LivestreamModel) (Livestream, error) {
 	ownerModel := UserModel{}
 	if err := tx.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {

@@ -119,7 +119,7 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
-    print("icon cache")
+	print("icon cache")
 	e := echo.New()
 	e.Debug = false
 	e.Logger.SetLevel(echolog.WARN)
