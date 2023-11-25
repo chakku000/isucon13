@@ -269,9 +269,10 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		GROUP BY l.id
 	)
 	SELECT
-		tmp.*,
 		ranks AS "Rank",
-		TotalTip,
+		ViewersCount,
+		MapTip,
+		TotalReports,
 		TotalReactions
 	FROM
 		tmp
