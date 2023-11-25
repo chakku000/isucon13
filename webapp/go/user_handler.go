@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"time"
+    "sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
@@ -86,19 +87,20 @@ type PostIconResponse struct {
 }
 
 // userID -> icon
-var userIconMap = map[string][]byte{}
+var userIconMapMutex = sync.RWMutex{}
+var userIconMap = map[int64][]byte{}
 
 func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	username := c.Param("username")
-	requestIconHash := c.Request().Header.Get("If-None-Match")
 
 	tx, err := dbConn.BeginTxx(ctx, nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
 	}
 	defer tx.Rollback()
+
 
 	// 初期実装
 	// SELECT * FROM users WHERE name = ?
@@ -112,20 +114,26 @@ func getIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return c.File(fallbackImage)
-		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
-		}
-	}
+    userIconMapMutex.RLock()
+    defer userIconMapMutex.RUnlock()
+    image := userIconMap[user.ID]
 
-	iconHash := fmt.Sprintf("%x", sha256.Sum256(image))
+	//var image []byte
+	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
+	//	if errors.Is(err, sql.ErrNoRows) {
+	//		return c.File(fallbackImage)
+	//	} else {
+	//		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
+	//	}
+	//}
 
-	if requestIconHash == iconHash {
-		return c.NoContent(http.StatusNotModified)
-	}
+    // TODO uncomment していいiconHash
+	// requestIconHash := c.Request().Header.Get("If-None-Match")
+	// iconHash := fmt.Sprintf("%x", sha256.Sum256(image))
+
+	//if requestIconHash == iconHash {
+	//	return c.NoContent(http.StatusNotModified)
+	//}
 
 	return c.Blob(http.StatusOK, "image/jpeg", image)
 }
@@ -154,26 +162,32 @@ func postIconHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
+    userIconMapMutex.Lock()
+    defer userIconMapMutex.Unlock()
+    userIconMap[userID] = req.Image
+
+    iconID := int64(len(userIconMap))
+
 	// 初期実装
 	// DELETE FROM icons WHRER user_id = ?
 	// INSERT INTO icons(user_id, image) VALUES (?, ?)
-	if _, err := tx.ExecContext(ctx, "DELETE FROM icons WHERE user_id = ?", userID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
-	}
+	//if _, err := tx.ExecContext(ctx, "DELETE FROM icons WHERE user_id = ?", userID); err != nil {
+	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
+	//}
 
-	rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image) VALUES (?, ?)", userID, req.Image)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
-	}
+	//rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image) VALUES (?, ?)", userID, req.Image)
+	//if err != nil {
+	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
+	//}
 
-	iconID, err := rs.LastInsertId()
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
-	}
+	//iconID, err := rs.LastInsertId()
+	//if err != nil {
+	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
+	//}
 
-	if err := tx.Commit(); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
-	}
+	//if err := tx.Commit(); err != nil {
+	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
+	//}
 
 	// ?? icon idはどこで使われている?
 	return c.JSON(http.StatusCreated, &PostIconResponse{
@@ -422,17 +436,20 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		return User{}, err
 	}
 
-	// TODO 修正の必要あり
-	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return User{}, err
-		}
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
-			return User{}, err
-		}
-	}
+    userIconMapMutex.RLock()
+    defer userIconMapMutex.Unlock()
+    image := userIconMap[userModel.ID]
+
+	//var image []byte
+	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
+	//	if !errors.Is(err, sql.ErrNoRows) {
+	//		return User{}, err
+	//	}
+	//	image, err = os.ReadFile(fallbackImage)
+	//	if err != nil {
+	//		return User{}, err
+	//	}
+	//}
 	iconHash := sha256.Sum256(image)
 
 	user := User{
