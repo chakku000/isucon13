@@ -490,7 +490,7 @@ func fetchUsersWithDetails(ctx context.Context, dbConn *sqlx.DB, userIDs []int64
 			IconHash: fmt.Sprintf("%x", iconHash),
 		}
 	}
-	return nil, nil
+	return users, nil
 }
 
 func fillLivecommentResponseWithConn(ctx context.Context, dbConn *sqlx.DB, livecommentModel LivecommentModel) (Livecomment, error) {
