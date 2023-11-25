@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -114,7 +115,11 @@ func getIconHandler(c echo.Context) error {
 
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	image := userIconMap[user.ID]
+	image, ok := userIconMap[user.ID]
+
+	if !ok {
+		return c.File(fallbackImage)
+	}
 
 	//var image []byte
 	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
@@ -436,7 +441,14 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	image := userIconMap[userModel.ID]
+	image, ok := userIconMap[userModel.ID]
+	var err error
+	if !ok {
+		image, err = os.ReadFile(fallbackImage)
+		if err != nil {
+			return User{}, err
+		}
+	}
 
 	//var image []byte
 	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
