@@ -253,6 +253,7 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		FROM
 			totaltips
 			LEFT JOIN totalreactions USING (id)
+		GROUP BY id
 	), tmp AS (
 		SELECT
 			l.id,
@@ -265,6 +266,7 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 			LEFT JOIN livestream_viewers_history lvh ON l.id = lvh.livestream_id
 			LEFT JOIN livecomment_reports lr ON l.id = lr.livestream_id
 		WHERE l.id = ?
+		GROUP BY l.id
 	)
 	SELECT
 		tmp.*,
