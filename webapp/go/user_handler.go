@@ -86,7 +86,7 @@ type PostIconResponse struct {
 }
 
 // userID -> icon
-var userIconMap = map[string][]byte{}
+var userIconMap = map[int64][]byte{}
 
 func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -148,6 +148,8 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "failed to decode the request body as json")
 	}
 
+    userIconMap[userID] = req.Image
+
 	tx, err := dbConn.BeginTxx(ctx, nil)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
@@ -166,10 +168,10 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
 	}
 
-	iconID, err := rs.LastInsertId()
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
-	}
+	//iconID, err := rs.LastInsertId()
+	//if err != nil {
+	//	return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
+	//}
 
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
@@ -177,7 +179,7 @@ func postIconHandler(c echo.Context) error {
 
 	// ?? icon idはどこで使われている?
 	return c.JSON(http.StatusCreated, &PostIconResponse{
-		ID: iconID,
+		ID: int64(len(userIconMap)),
 	})
 }
 
