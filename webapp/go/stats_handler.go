@@ -240,9 +240,9 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		Count int64
 	}
 
-	rows, err := tx.QueryContext(ctx, "SELECT l.id as id, COUNT(*) FROM livestreams l INNER JOIN reactions r ON l.id = r.livestream_id")
+	rows, err := tx.QueryContext(ctx, "SELECT l.id as id, COUNT(*) FROM livestreams l INNER JOIN reactions r ON l.id = r.livestream_id group by l.id")
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count livestreamCount: "+err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count livestreamReactionCount: "+err.Error())
 	}
 
 	liveStreamReactionsCountMap := map[int64]int64{}
@@ -260,7 +260,7 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 		Count int64
 	}
 
-	rows, err = tx.QueryContext(ctx, "SELECT l.id as id, IFNULL(SUM(l2.tip), 0) FROM livestreams l INNER JOIN livecomments l2 ON l.id = l2.livestream_id group by l.id;")
+	rows, err = tx.QueryContext(ctx, "SELECT l.id as id, IFNULL(SUM(l2.tip), 0) FROM livestreams l INNER JOIN livecomments l2 ON l.id = l2.livestream_id group by l.id")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count livestreamCommentCount: "+err.Error())
 	}
@@ -275,9 +275,15 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 
 	var ranking LivestreamRanking
 	for _, livestream := range livestreams {
-		reactions := liveStreamReactionsCountMap[livestream.ID]
+		reactions, ok := liveStreamReactionsCountMap[livestream.ID]
+        if !ok {
+            reactions = 0
+        }
 
-		totalTips := liveStreamCommentCountMap[livestream.ID]
+		totalTips, ok := liveStreamCommentCountMap[livestream.ID]
+        if !ok {
+            totalTips = 0
+        }
 
 		score := reactions + totalTips
 		ranking = append(ranking, LivestreamRankingEntry{
