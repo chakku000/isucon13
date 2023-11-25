@@ -458,13 +458,16 @@ func verifyUserSession(c echo.Context) error {
 func fetchUserIcon(userID int64) ([]byte, error) {
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	image, ok := userIconMap[userID]
 	var err error
-	if !ok {
+	iconFilePath := getIconPath(userID)
+	var image []byte
+	if !FileExists(iconFilePath) {
 		image, err = os.ReadFile(fallbackImage)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		image, err = os.ReadFile(iconFilePath)
 	}
 	return image, nil
 }
