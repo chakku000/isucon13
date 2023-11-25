@@ -249,7 +249,8 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 			id,
 			ROW_NUMBER() OVER (
 				ORDER BY
-					TotalTip + IFNULL(TotalReactions, 0) DESC
+					TotalTip + IFNULL(TotalReactions, 0) DESC,
+					id DESC
 			) AS ranks
 		FROM
 			totaltips
