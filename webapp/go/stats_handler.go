@@ -223,53 +223,64 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 	}
 
 	err = dbConn.GetContext(ctx, &stats, `
-		WITH totaltips AS (
-			SELECT
-				l.id,
-				IFNULL(SUM(lc.tip), 0) AS TotalTip,
-				IFNULL(MAX(lc.tip), 0) AS MaxTip
-			FROM
-				livestreams l
-				LEFT JOIN livecomments lc ON l.id = lc.livestream_id
-			GROUP BY
-				l.id
-		),
-		totalreactions AS (
-			SELECT
-				l.id,
-				COUNT(DISTINCT r.id) AS TotalReactions
-			FROM
-				livestreams l
-				LEFT JOIN reactions r ON l.id = r.livestream_id
-			GROUP BY
-				l.id
-		),
-		ranking AS (
-			SELECT
-				id,
-				ROW_NUMBER() OVER (
-					ORDER BY
-						TotalTip + IFNULL(TotalReactions, 0) DESC
-				) AS "Rank"
-			FROM
-				totaltips
-				LEFT JOIN totalreactions USING (id)
-		)
+	WITH totaltips AS (
 		SELECT
-			MaxTip,
-			TotalReactions,
-			"Rank",
-			COUNT(DISTINCT lvh.user_id) AS ViewersCount,
-			COUNT(DISTINCT lr.id) AS TotalReports
+			l.id,
+			IFNULL(SUM(lc.tip), 0) AS TotalTip
 		FROM
-			totaltips AS l
+			livestreams l
+			LEFT JOIN livecomments lc ON l.id = lc.livestream_id
+		GROUP BY
+			l.id
+	),
+	totalreactions AS (
+		SELECT
+			l.id,
+			COUNT(DISTINCT r.id) AS TotalReactions
+		FROM
+			livestreams l
+			LEFT JOIN reactions r ON l.id = r.livestream_id
+		GROUP BY
+			l.id
+	),
+	ranking AS (
+		SELECT
+			id,
+			ROW_NUMBER() OVER (
+				ORDER BY
+					TotalTip + IFNULL(TotalReactions, 0) DESC
+			) AS ranks
+		FROM
+			totaltips
 			LEFT JOIN totalreactions USING (id)
-			LEFT JOIN ranking USING (id)
+	), tmp AS (
+		SELECT
+			l.id,
+			COUNT(DISTINCT lvh.user_id) AS ViewersCount,
+			COUNT(DISTINCT lr.id) AS TotalReports,
+			IFNULL(MAX(lc.tip), 0) AS MaxTip
+		FROM
+			livestreams l
+			LEFT JOIN livecomments lc ON l.id = lc.livestream_id
 			LEFT JOIN livestream_viewers_history lvh ON l.id = lvh.livestream_id
 			LEFT JOIN livecomment_reports lr ON l.id = lr.livestream_id
-		WHERE
-			l.id = ?
-    `, livestreamID)
+		WHERE l.id = ?
+	)
+	SELECT
+		tmp.*,
+		ranks AS "Rank",
+		TotalTip,
+		TotalReactions
+	FROM
+		tmp
+	JOIN
+		totaltips USING (id)
+	JOIN
+		totalreactions USING (id)
+	JOIN
+		ranking USING (id)
+	WHERE id = ?
+    `, livestreamID, livestreamID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream statistics: "+err.Error())
 	}
