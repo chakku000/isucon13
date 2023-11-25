@@ -93,7 +93,8 @@ CREATE TABLE `ng_words` (
   `user_id` BIGINT NOT NULL,
   `livestream_id` BIGINT NOT NULL,
   `word` VARCHAR(255) NOT NULL,
-  `created_at` BIGINT NOT NULL
+  `created_at` BIGINT NOT NULL,
+  INDEX `livestream_id_user_id` (`livestream_id`, `user_id`, `created`)
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 CREATE INDEX ng_words_word ON ng_words(`word`);
 
