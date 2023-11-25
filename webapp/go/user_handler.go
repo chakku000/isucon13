@@ -85,10 +85,14 @@ type PostIconResponse struct {
 	ID int64 `json:"id"`
 }
 
+// userID -> icon
+var userIconMap = map[string][]byte{}
+
 func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	username := c.Param("username")
+	requestIconHash := c.Request().Header.Get("If-None-Match")
 
 	tx, err := dbConn.BeginTxx(ctx, nil)
 	if err != nil {
@@ -96,6 +100,10 @@ func getIconHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
+	// 初期実装
+	// SELECT * FROM users WHERE name = ?
+	//      user.IDが目的
+	// SELECT image FROM icons WHERE user_id = ?
 	var user UserModel
 	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -111,6 +119,12 @@ func getIconHandler(c echo.Context) error {
 		} else {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
 		}
+	}
+
+	iconHash := fmt.Sprintf("%x", sha256.Sum256(image))
+
+	if requestIconHash == iconHash {
+		return c.NoContent(http.StatusNotModified)
 	}
 
 	return c.Blob(http.StatusOK, "image/jpeg", image)
@@ -140,6 +154,9 @@ func postIconHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
+	// 初期実装
+	// DELETE FROM icons WHRER user_id = ?
+	// INSERT INTO icons(user_id, image) VALUES (?, ?)
 	if _, err := tx.ExecContext(ctx, "DELETE FROM icons WHERE user_id = ?", userID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
 	}
@@ -158,6 +175,7 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
+	// ?? icon idはどこで使われている?
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
 	})
@@ -404,6 +422,7 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		return User{}, err
 	}
 
+	// TODO 修正の必要あり
 	var image []byte
 	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
