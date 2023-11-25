@@ -424,17 +424,17 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		return User{}, err
 	}
 
-	// TODO 修正の必要あり
-	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return User{}, err
-		}
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
-			return User{}, err
-		}
-	}
+	//var image []byte
+	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
+	//	if !errors.Is(err, sql.ErrNoRows) {
+	//		return User{}, err
+	//	}
+	//	image, err = os.ReadFile(fallbackImage)
+	//	if err != nil {
+	//		return User{}, err
+	//	}
+	//}
+    image := userIconMap[userModel.ID]
 	iconHash := sha256.Sum256(image)
 
 	user := User{
