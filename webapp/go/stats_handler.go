@@ -237,7 +237,7 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 	totalreactions AS (
 		SELECT
 			l.id,
-			COUNT(*) AS TotalReactions
+			COUNT(r.id) AS TotalReactions
 		FROM
 			livestreams l
 			LEFT JOIN reactions r ON l.id = r.livestream_id
@@ -260,7 +260,7 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 	totalviewers AS (
 		SELECT
 			l.id,
-			COUNT(*) AS ViewersCount
+			COUNT(lvh.id) AS ViewersCount
 		FROM
 			livestreams l
 			LEFT JOIN livestream_viewers_history lvh ON l.id = lvh.livestream_id
@@ -270,7 +270,7 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 	totalreports AS (
 		SELECT
 			l.id,
-			COUNT(*) AS TotalReports
+			COUNT(lr.id) AS TotalReports
 		FROM
 			livestreams l
 			LEFT JOIN livecomment_reports lr ON l.id = lr.livestream_id
