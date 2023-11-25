@@ -41,7 +41,7 @@ func init() {
 		return
 	}
 
-	fallbackImageHash = fmt.Sprintf("%s", sha256.Sum256(fi))
+	fallbackImageHash = fmt.Sprintf("%x", sha256.Sum256(fi))
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	if secretKey, ok := os.LookupEnv("ISUCON13_SESSION_SECRETKEY"); ok {

@@ -186,27 +186,6 @@ func postIconHandler(c echo.Context) error {
 
 	iconID := int64(len(iconFiles))
 
-	// 初期実装
-	// DELETE FROM icons WHRER user_id = ?
-	// INSERT INTO icons(user_id, image) VALUES (?, ?)
-	//if _, err := tx.ExecContext(ctx, "DELETE FROM icons WHERE user_id = ?", userID); err != nil {
-	//  return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
-	//}
-
-	//rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image) VALUES (?, ?)", userID, req.Image)
-	//if err != nil {
-	//  return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
-	//}
-
-	//iconID, err := rs.LastInsertId()
-	//if err != nil {
-	//  return echo.NewHTTPError(http.StatusInternalServerError, "failed to get last inserted icon id: "+err.Error())
-	//}
-
-	//if err := tx.Commit(); err != nil {
-	//  return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
-	//}
-
 	// ?? icon idはどこで使われている?
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
