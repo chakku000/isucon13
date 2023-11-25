@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -79,6 +80,19 @@ func getLivecommentsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "livestream_id in path must be integer")
 	}
 
+	livestreamModel := LivestreamModel{}
+	if err := dbConn.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livestreamID); err != nil {
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+		}
+	}
+	livestream, err := fillLivestreamResponseWithConn(ctx, dbConn, livestreamModel)
+	if err != nil {
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+		}
+	}
+
 	// 特定の配信に紐づくコメント情報を取得する
 	query := "SELECT * FROM livecomments WHERE livestream_id = ? ORDER BY created_at DESC"
 	if c.QueryParam("limit") != "" {
@@ -98,15 +112,39 @@ func getLivecommentsHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livecomments: "+err.Error())
 	}
 
-	// 特定の配信に紐づくコメントの詳細情報を取得
+	userIDMap := map[int64]*User{}
+	var userIDs []int64
+	for _, livecommentModel := range livecommentModels {
+		if _, ok := userIDMap[livecommentModel.UserID]; ok {
+			continue
+		}
+		userIDMap[livecommentModel.UserID] = nil
+		userIDs = append(userIDs, livecommentModel.UserID)
+	}
+
+	users, err := fetchUsersWithDetails(ctx, dbConn, userIDs)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+	}
+	for _, user := range users {
+		userIDMap[user.ID] = user
+	}
+
 	livecomments := make([]Livecomment, len(livecommentModels))
-	for i := range livecommentModels {
-		livecomment, err := fillLivecommentResponseWithConn(ctx, dbConn, livecommentModels[i])
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to fil livecomments: "+err.Error())
+	for i, livecomment := range livecommentModels {
+		user, ok := userIDMap[livecomment.UserID]
+		if !ok || user == nil {
+			continue
 		}
 
-		livecomments[i] = livecomment
+		livecomments[i] = Livecomment{
+			ID:         livecomment.ID,
+			User:       *user,
+			Livestream: livestream,
+			Comment:    livecomment.Comment,
+			Tip:        livecomment.Tip,
+			CreatedAt:  livecomment.CreatedAt,
+		}
 	}
 
 	return c.JSON(http.StatusOK, livecomments)
@@ -392,6 +430,69 @@ func moderateHandler(c echo.Context) error {
 	return c.JSON(http.StatusCreated, map[string]interface{}{
 		"word_id": wordID,
 	})
+}
+
+func fetchUsersWithDetails(ctx context.Context, dbConn *sqlx.DB, userIDs []int64) ([]*User, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+	type dbResp struct {
+		ID          int64  `db:"id"`
+		Name        string `db:"name"`
+		DisplayName string `db:"display_name"`
+		Description string `db:"description"`
+		ThemeID     int64  `db:"theme_id"`
+		DarkMode    bool   `db:"dark_mode"`
+	}
+	q := " SELECT " +
+		"   `u`.`id`, " +
+		"   `u`.`name`, " +
+		"   `u`.`display_name`, " +
+		"   `u`.`description`, " +
+		"   `t`.`id` AS `theme_id`, " +
+		"   `t`.`dark_mode` " +
+		" FROM `users` AS `u` " +
+		" INNER JOIN `themes` AS `t` ON `u`.`id` = `t`.`user_id` " +
+		" WHERE `u`.`id` IN (?) "
+	var resp []*dbResp
+	if q1, args, err := sqlx.In(q, userIDs); err != nil {
+		return nil, err
+	} else if err := dbConn.SelectContext(ctx, &resp, q1, args...); err != nil {
+		return nil, err
+	}
+
+	// user := User{
+	// 	ID:          userModel.ID,
+	// 	Name:        userModel.Name,
+	// 	DisplayName: userModel.DisplayName,
+	// 	Description: userModel.Description,
+	// 	Theme: Theme{
+	// 		ID:       themeModel.ID,
+	// 		DarkMode: themeModel.DarkMode,
+	// 	},
+	// 	IconHash: fmt.Sprintf("%x", iconHash),
+	// }
+
+	users := make([]*User, len(resp))
+	for i, r := range resp {
+		image, err := fetchUserIcon(r.ID)
+		if err != nil {
+			return nil, err
+		}
+		iconHash := sha256.Sum256(image)
+		users[i] = &User{
+			ID:          r.ID,
+			Name:        r.Name,
+			DisplayName: r.DisplayName,
+			Description: r.Description,
+			Theme: Theme{
+				ID:       r.ThemeID,
+				DarkMode: r.DarkMode,
+			},
+			IconHash: fmt.Sprintf("%x", iconHash),
+		}
+	}
+	return users, nil
 }
 
 func fillLivecommentResponseWithConn(ctx context.Context, dbConn *sqlx.DB, livecommentModel LivecommentModel) (Livecomment, error) {

@@ -455,6 +455,23 @@ func verifyUserSession(c echo.Context) error {
 	return nil
 }
 
+func fetchUserIcon(userID int64) ([]byte, error) {
+	userIconMapMutex.RLock()
+	defer userIconMapMutex.RUnlock()
+	var err error
+	iconFilePath := getIconPath(userID)
+	var image []byte
+	if !FileExists(iconFilePath) {
+		image, err = os.ReadFile(fallbackImage)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		image, err = os.ReadFile(iconFilePath)
+	}
+	return image, nil
+}
+
 func fillUserResponseWithConn(ctx context.Context, dbConn *sqlx.DB, userModel UserModel) (User, error) {
 	themeModel := ThemeModel{}
 	if err := dbConn.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
