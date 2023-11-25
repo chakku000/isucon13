@@ -94,18 +94,21 @@ func getIconHandler(c echo.Context) error {
 	username := c.Param("username")
 	requestIconHash := c.Request().Header.Get("If-None-Match")
 
-	tx, err := dbConn.BeginTxx(ctx, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
-	}
-	defer tx.Rollback()
+	/*
+		初期実装で不要そうなトランザクションがあるので外す
+		tx, err := dbConn.BeginTxx(ctx, nil)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
+		}
+		defer tx.Rollback()
+	*/
 
 	// 初期実装
 	// SELECT * FROM users WHERE name = ?
 	//      user.IDが目的
 	// SELECT image FROM icons WHERE user_id = ?
 	var user UserModel
-	if err := tx.GetContext(ctx, &user, "SELECT user_id FROM users WHERE name = ?", username); err != nil {
+	if err := dbConn.GetContext(ctx, &user, "SELECT user_id FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
 		}
