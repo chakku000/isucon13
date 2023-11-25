@@ -115,10 +115,6 @@ func getIconHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	// 初期実装
-	// SELECT * FROM users WHERE name = ?
-	//  }    user.IDが目的
-	// SELECT image FROM icons WHERE user_id = ?
 	var user UserModel
 	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -139,16 +135,7 @@ func getIconHandler(c echo.Context) error {
 	if ok && iconHash == requestIconHash {
 		return c.NoContent(http.StatusNotModified)
 	}
-	// TODO もしhashがマッチしなければそのまま画像を返してしまっていい?
-	//return c.Blob(http.StatusOK, "image/jpeg", )
 	return c.File(iconFilePath)
-
-	//image, err := ioutil.ReadFile(iconFilePath)
-	//if err != nil {
-	//  fmt.Println("Failed to open file: ", err)
-	//  return echo.NewHTTPError(http.StatusInternalServerError, "Couldn't open file")
-	//}
-
 	//return c.Blob(http.StatusOK, "image/jpeg", image)
 }
 
@@ -468,6 +455,7 @@ func getImageHash(userID int64) string {
 	iconFilePath := getIconPath(userID)
 
 	if !FileExists(iconFilePath) {
+        println("return fallback hash:", fallbackImage)
 		return fallbackImageHash
 	}
 
