@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
 	"time"
 
@@ -30,6 +32,7 @@ const (
 )
 
 var fallbackImage = "../img/NoImage.jpg"
+var iconBaseDir = "/home/isucon/icons"
 
 type UserModel struct {
 	ID             int64  `db:"id"`
@@ -88,7 +91,16 @@ type PostIconResponse struct {
 
 // userID -> icon
 var userIconMapMutex = sync.RWMutex{}
-var userIconMap = map[int64][]byte{}
+
+func getIconPath(userID int64) string {
+	uid := strconv.FormatInt(userID, 10)
+	return iconBaseDir + "/" + uid
+}
+
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
 
 func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -115,28 +127,23 @@ func getIconHandler(c echo.Context) error {
 
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	image, ok := userIconMap[user.ID]
-
-	if !ok {
+	iconFilePath := getIconPath(user.ID)
+	if !FileExists(iconFilePath) {
 		return c.File(fallbackImage)
 	}
 
-	//var image []byte
-	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
-	//	if errors.Is(err, sql.ErrNoRows) {
-	//		return c.File(fallbackImage)
-	//	} else {
-	//		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
-	//	}
-	//}
+	image, err := ioutil.ReadFile(iconFilePath)
+	if err != nil {
+		fmt.Println("Failed to open file: ", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Couldn't open file")
+	}
 
 	// TODO uncomment していいiconHash
-	// requestIconHash := c.Request().Header.Get("If-None-Match")
-	// iconHash := fmt.Sprintf("%x", sha256.Sum256(image))
-
-	//if requestIconHash == iconHash {
-	//	return c.NoContent(http.StatusNotModified)
-	//}
+	requestIconHash := c.Request().Header.Get("If-None-Match")
+	iconHash := fmt.Sprintf("%x", sha256.Sum256(image))
+	if requestIconHash == iconHash {
+		return c.NoContent(http.StatusNotModified)
+	}
 
 	return c.Blob(http.StatusOK, "image/jpeg", image)
 }
@@ -167,9 +174,24 @@ func postIconHandler(c echo.Context) error {
 
 	userIconMapMutex.Lock()
 	defer userIconMapMutex.Unlock()
-	userIconMap[userID] = req.Image
+	iconFilePath := getIconPath(userID)
 
-	iconID := int64(len(userIconMap))
+	ioutil.WriteFile(iconFilePath, req.Image, 0644)
+
+	// iconBaseDir以下のファイル数をiconIDにする
+	// もしかしたらユニークならなんでもいいかも
+	iconFileDirStat, err := os.Open(iconBaseDir)
+	if err != nil {
+		return err
+	}
+	defer iconFileDirStat.Close()
+
+	iconFiles, err := iconFileDirStat.Readdirnames(0)
+	if err != nil {
+		return err
+	}
+
+	iconID := int64(len(iconFiles))
 
 	// 初期実装
 	// DELETE FROM icons WHRER user_id = ?
@@ -441,14 +463,18 @@ func fillUserResponseWithConn(ctx context.Context, dbConn *sqlx.DB, userModel Us
 
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	image, ok := userIconMap[userModel.ID]
 	var err error
-	if !ok {
+	iconFilePath := getIconPath(userModel.ID)
+	var image []byte
+	if !FileExists(iconFilePath) {
 		image, err = os.ReadFile(fallbackImage)
 		if err != nil {
 			return User{}, err
 		}
+	} else {
+		image, err = os.ReadFile(iconFilePath)
 	}
+
 	iconHash := sha256.Sum256(image)
 
 	user := User{
@@ -474,25 +500,18 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 
 	userIconMapMutex.RLock()
 	defer userIconMapMutex.RUnlock()
-	image, ok := userIconMap[userModel.ID]
 	var err error
-	if !ok {
+	iconFilePath := getIconPath(userModel.ID)
+	var image []byte
+	if !FileExists(iconFilePath) {
 		image, err = os.ReadFile(fallbackImage)
 		if err != nil {
 			return User{}, err
 		}
+	} else {
+		image, err = os.ReadFile(iconFilePath)
 	}
 
-	//var image []byte
-	//if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-	//	if !errors.Is(err, sql.ErrNoRows) {
-	//		return User{}, err
-	//	}
-	//	image, err = os.ReadFile(fallbackImage)
-	//	if err != nil {
-	//		return User{}, err
-	//	}
-	//}
 	iconHash := sha256.Sum256(image)
 
 	user := User{
