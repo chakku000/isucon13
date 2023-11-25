@@ -271,7 +271,7 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 	SELECT
 		ranks AS "Rank",
 		ViewersCount,
-		MapTip,
+		MaxTip,
 		TotalReports,
 		TotalReactions
 	FROM
